@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudyAI</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:#f9f9f7;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:2rem 1rem}
+  .header{text-align:center;margin-bottom:2.5rem}
+  h1{font-family:'Syne',sans-serif;font-size:36px;font-weight:700;color:#111;margin-bottom:6px}
+  .tagline{font-size:15px;color:#666}
+  .card{background:#fff;border-radius:16px;border:1px solid #e8e8e8;padding:2rem;width:100%;max-width:680px;box-shadow:0 2px 12px rgba(0,0,0,0.05)}
+  .tabs{display:flex;gap:8px;margin-bottom:1.5rem}
+  .tab{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid #e0e0e0;background:transparent;color:#666;transition:all 0.15s;font-family:'DM Sans',sans-serif}
+  .tab.active{background:#111;color:#fff;border-color:transparent}
+  textarea{width:100%;min-height:160px;resize:vertical;font-family:'DM Sans',sans-serif;font-size:14px;padding:12px;border:1px solid #e0e0e0;border-radius:10px;background:#fafafa;color:#111;line-height:1.6;margin-bottom:1rem}
+  textarea:focus{outline:none;border-color:#111}
+  .btn-row{display:flex;gap:8px}
+  .btn{padding:9px 22px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:1px solid #e0e0e0;background:#111;color:#fff;transition:all 0.15s;font-family:'DM Sans',sans-serif}
+  .btn:hover{opacity:0.85}
+  .btn:disabled{opacity:0.4;cursor:not-allowed}
+  .btn-outline{background:transparent;color:#111}
+  .output{margin-top:1.5rem;padding:1.25rem;background:#fafafa;border-radius:10px;border:1px solid #eee;line-height:1.7;font-size:14px;color:#111}
+  .quiz-card{background:#fff;border:1px solid #eee;border-radius:10px;padding:1.25rem;margin-bottom:1rem}
+  .q-num{font-size:11px;font-weight:500;color:#999;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px}
+  .q-text{font-size:15px;font-weight:500;color:#111;margin-bottom:1rem}
+  .choices{display:flex;flex-direction:column;gap:8px}
+  .choice{padding:10px 14px;border-radius:8px;border:1px solid #e0e0e0;background:transparent;color:#111;font-size:13px;cursor:pointer;text-align:left;transition:all 0.12s;font-family:'DM Sans',sans-serif}
+  .choice:hover:not(:disabled){background:#f5f5f5}
+  .choice.correct{background:#eaf3de;border-color:#639922;color:#27500a}
+  .choice.wrong{background:#fcebeb;border-color:#e24b4a;color:#791f1f}
+  .choice:disabled{cursor:default}
+  .explanation{margin-top:10px;font-size:13px;color:#555;padding:10px;background:#f5f5f5;border-radius:8px;display:none}
+  .score-pill{font-size:13px;font-weight:500;padding:4px 14px;border-radius:999px;background:#f0f0f0;display:inline-block;margin-bottom:1.5rem}
+  .loading{display:flex;align-items:center;gap:10px;color:#999;font-size:14px;padding:1rem 0}
+  .dot{width:6px;height:6px;border-radius:50%;background:#999;animation:pulse 1.2s ease-in-out infinite}
+  .dot:nth-child(2){animation-delay:0.2s}
+  .dot:nth-child(3){animation-delay:0.4s}
+  @keyframes pulse{0%,80%,100%{opacity:0.3}40%{opacity:1}}
+  .guide-h3{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:#111;margin:1rem 0 6px}
+  .footer{margin-top:2rem;font-size:12px;color:#aaa}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>StudyAI</h1>
+  <p class="tagline">Paste your notes — get a study guide or quiz</p>
+</div>
+<div class="card">
+  <div class="tabs">
+    <button class="tab active" onclick="setMode('guide')">Study guide</button>
+    <button class="tab" onclick="setMode('quiz')">Quiz me</button>
+  </div>
+  <textarea id="notes" placeholder="Paste your notes, lecture slides, or any text here..."></textarea>
+  <div class="btn-row">
+    <button class="btn" id="goBtn" onclick="generate()">Generate ↗</button>
+    <button class="btn btn-outline" onclick="clearAll()">Clear</button>
+  </div>
+  <div id="loading" class="loading" style="display:none">
+    <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    <span id="loadingText">Generating...</span>
+  </div>
+  <div id="result"></div>
+</div>
+<p class="footer">Built with Claude AI</p>
+
+<script>
+let mode = 'guide';
+let quizData = [];
+let answered = 0;
+let correct = 0;
+
+function setMode(m){
+  mode = m;
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    t.classList.toggle('active',(i===0&&m==='guide')||(i===1&&m==='quiz'));
+  });
+  document.getElementById('result').innerHTML='';
+}
+
+function clearAll(){
+  document.getElementById('notes').value='';
+  document.getElementById('result').innerHTML='';
+}
+
+async function generate(){
+  const notes = document.getElementById('notes').value.trim();
+  if(!notes){alert('Paste some notes first!');return;}
+  const btn = document.getElementById('goBtn');
+  const loading = document.getElementById('loading');
+  btn.disabled=true;
+  loading.style.display='flex';
+  document.getElementById('loadingText').textContent = mode==='guide'?'Building your study guide...':'Writing quiz questions...';
+  document.getElementById('result').innerHTML='';
+
+  const prompt = mode==='guide'
+    ? `You are a study assistant. Given the following notes, create a clear, well-organized study guide. Use sections with headers (use ### for headers), bullet points for key facts, and end with a "Key terms" section. Be concise but thorough.\n\nNotes:\n${notes}`
+    : `You are a quiz generator. Given the following notes, create exactly 5 multiple choice questions. Respond ONLY with a JSON array, no markdown, no explanation. Format:\n[{"question":"...","choices":["A. ...","B. ...","C. ...","D. ..."],"answer":"A","explanation":"..."}]\n\nNotes:\n${notes}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,messages:[{role:'user',content:prompt}]})
+    });
+    const data = await res.json();
+    const text = data.content.map(b=>b.text||'').join('');
+    mode==='guide' ? renderGuide(text) : renderQuiz(text);
+  } catch(e){
+    document.getElementById('result').innerHTML='<div class="output">Something went wrong. Try again.</div>';
+  }
+  btn.disabled=false;
+  loading.style.display='none';
+}
+
+function renderGuide(text){
+  const html = text
+    .replace(/### (.+)/g,'<h3 class="guide-h3">$1</h3>')
+    .replace(/## (.+)/g,'<h2 class="guide-h3" style="font-size:17px">$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/^- (.+)/gm,'<li style="margin-left:1.2rem;margin-bottom:4px">$1</li>')
+    .replace(/\n\n/g,'<br><br>');
+  document.getElementById('result').innerHTML=`<div class="output" style="white-space:normal">${html}</div>`;
+}
+
+function renderQuiz(text){
+  try {
+    quizData = JSON.parse(text.replace(/```json|```/g,'').trim());
+    answered=0; correct=0;
+    let html=`<div><span class="score-pill" id="scoreDisplay">0 / ${quizData.length} answered</span></div>`;
+    quizData.forEach((q,i)=>{
+      html+=`<div class="quiz-card">
+        <div class="q-num">Question ${i+1}</div>
+        <div class="q-text">${q.question}</div>
+        <div class="choices">
+          ${q.choices.map((c,j)=>`<button class="choice" id="c${i}_${j}" onclick="answer(${i},${j},'${q.answer}')">${c}</button>`).join('')}
+        </div>
+        <div class="explanation" id="exp${i}">💡 ${q.explanation}</div>
+      </div>`;
+    });
+    document.getElementById('result').innerHTML=html;
+  } catch(e){
+    document.getElementById('result').innerHTML='<div class="output">Could not parse quiz. Try again with more detailed notes.</div>';
+  }
+}
+
+function answer(qi,ci,correctLetter){
+  const choices = document.querySelectorAll(`#c${qi}_0, #c${qi}_1, #c${qi}_2, #c${qi}_3`);
+  choices.forEach(c=>c.disabled=true);
+  const correctIdx=['A','B','C','D'].indexOf(correctLetter);
+  document.getElementById(`c${qi}_${ci}`).classList.add(ci===correctIdx?'correct':'wrong');
+  if(ci!==correctIdx) document.getElementById(`c${qi}_${correctIdx}`).classList.add('correct');
+  document.getElementById(`exp${qi}`).style.display='block';
+  answered++;
+  if(ci===correctIdx) correct++;
+  document.getElementById('scoreDisplay').textContent=`${correct} correct · ${answered} / ${quizData.length} answered`;
+}
+</script>
+</body>
+</html>
